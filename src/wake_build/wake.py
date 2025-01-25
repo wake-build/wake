@@ -3,6 +3,16 @@ import json
 import sys
 
 
+def build_image(config) -> bool:
+    print(f"Building image {config['name']}:{config['tag']} with the following config: {config}")
+    return True
+
+
+def pull_image(config) -> bool:
+    print(f"Pulling image {config['name']}:{config['tag']} with the following config: {config}")
+    return True
+
+
 def get_image_config(images_config, name_tag: tuple):
     name, tag = name_tag
     for image in images_config:
@@ -33,7 +43,7 @@ def get_matching_targets(images_data, targets, action):
     return matches
 
 
-def get_dependency_targets(images_data, target, action):
+def get_dependency_targets(images_data, target, action) -> set:
     action_targets = [
             (image["name"], image["tag"])
             for image in filter(lambda x: action in x["actions"], images_data)
@@ -58,7 +68,9 @@ def pull_images(images_data, targets=[]):
     pull_targets = set(targets)
     for target in pull_targets:
         image = get_image_config(images_data, target)
-        print(f"Pulling image {image['name']}:{image['tag']} with the following config: {image}")
+        success = pull_image(image)
+        if not success:
+            exit(f"Failed to pull image: {image['name']}:{image['tag']}")
 
 
 def build_images(images_data, targets=[]):
@@ -69,10 +81,23 @@ def build_images(images_data, targets=[]):
         ]
     build_targets = set(targets)
     for target in build_targets.copy():
-        build_targets.update(get_dependency_targets(images_data, target, "build"))
-    for target in build_targets:
-        image = get_image_config(images_data, target)
-        print(f"Building image {image['name']}:{image['tag']} with the following config: {image}")
+        dep_targets = get_dependency_targets(images_data, target, "build")
+        build_targets.update(dep_targets)
+    remaining_targets = build_targets.copy()
+    while len(remaining_targets):
+        did_something = False
+        for target in remaining_targets.copy():
+            image = get_image_config(images_data, target)
+            for dep in image.get("dependencies", []):
+                # Will only be in remaining_targets if it requires building
+                if (dep["name"], dep["tag"]) in remaining_targets:
+                    break
+            if not build_image(image):
+                exit(f"Failed to build image: {image['name']}:{image['tag']}")
+            remaining_targets.remove(target)
+            did_something = True
+        if not did_something:
+            raise ValueError("Circular dependency detected")
 
 
 def validate_images_schema(images):
@@ -135,14 +160,14 @@ def validate_images_dependencies(images):
     # Check that all dependencies are defined
     image_names = [image["name"] for image in images]
     image_names = [
-        image["name"] for image in filter(lambda x: "pull" in x["actions"], images)
+        image["name"] for image in filter(lambda x: len({"pull", "build"}.intersection(set(x["actions"]))), images)
     ]
     for image in images:
         if "dependencies" in image:
             for dependency in image["dependencies"]:
                 if dependency["name"] not in image_names:
                     raise ValueError(
-                        f"Image {image['name']} has a dependency on {dependency['name']} which does not exist"
+                        f"Image {image['name']} has a dependency on {dependency['name']} which does not exist or has no pull or build action"
                     )
     # TODO check for circular dependencies
 
