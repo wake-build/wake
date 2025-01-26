@@ -7,7 +7,6 @@ from argparse import ArgumentParser
 
 def build_image(config) -> bool:
     build_args = [
-        "echo",
         "docker",
         "build",
         "--tag",
