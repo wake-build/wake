@@ -238,9 +238,9 @@ def validate_images_dependencies(images):
 
 def main():
     parser = ArgumentParser("wake")
-    parser.add_argument("--config", type=str, default="wake.json")
-    parser.add_argument("--tag-prefix", type=str, default=None)
-    parser.add_argument("--cosign-profile", type=str, default=None)
+    parser.add_argument("-f", "--config", type=str, default="Wakefile")
+    parser.add_argument("-t", "--tag-prefix", type=str, default=None)
+    parser.add_argument("-p", "--cosign-profile", type=str, default=None)
     subparsers = parser.add_subparsers(dest="action", required=True)
 
     build_parser = subparsers.add_parser("build")
@@ -260,8 +260,11 @@ def main():
     push_parser.add_argument("targets", type=str, nargs="*")
 
     args = parser.parse_args()
-    with open(args.config, "r") as f:
-        images_data = json.load(f)
+    try:
+        with open(args.config, "r") as f:
+            images_data = json.load(f)
+    except FileNotFoundError:
+        exit(f"Could not find config file: {args.config}")
     try:
         validate_images_schema(images_data)
         validate_images_dependencies(images_data)

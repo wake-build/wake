@@ -1,5 +1,5 @@
 .vscode
-wake.json
+Wakefile
 *.egg-info
 **__pycache__
 .env
