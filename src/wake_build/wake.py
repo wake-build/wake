@@ -1,16 +1,52 @@
-from argparse import ArgumentParser
 import json
+import os
+import subprocess
 import sys
+from argparse import ArgumentParser
 
 
 def build_image(config) -> bool:
-    print(f"Building image {config['name']}:{config['tag']} with the following config: {config}")
-    return True
+    build_args = [
+        "echo",
+        "docker",
+        "build",
+        "--tag",
+        f"{config['name']}:{config['tag']}",
+    ]
+    if "target" in config:
+        build_args.extend(["--target", config["target"]])
+    if "dockerfile" in config:
+        build_args.extend(["--file", config["dockerfile"]])
+    if "build_args" in config:
+        for key, value in config["build_args"].items():
+            build_args.extend(["--build-arg", f"{key}={value}"])
+    if "env_args" in config:
+        for key in config["env_args"]:
+            build_args.extend(["--build-arg", f"{key}={os.environ[key]}"])
+    if "context" in config:
+        build_args.append(config["context"])
+    else:
+        build_args.append(".")
+    proc = subprocess.run(build_args)
+    return proc.returncode == 0
 
 
 def pull_image(config) -> bool:
-    print(f"Pulling image {config['name']}:{config['tag']} with the following config: {config}")
-    return True
+    proc = subprocess.run(["docker", "pull", f"{config['name']}:{config['tag']}"])
+    return proc.returncode == 0
+
+
+def tag_image(config, prefix="") -> bool:
+    if not prefix:
+        # Skip tagging if no prefix is provided
+        return True
+    proc = subprocess.run(["docker", "tag", f"{config['name']}:{config['tag']}", f"{prefix}{config['name']}:{config['tag']}"])
+    return proc.returncode == 0
+
+
+def push_image(config, prefix="") -> bool:
+    proc = subprocess.run(["docker", "push", f"{prefix}{config['name']}:{config['tag']}"])
+    return proc.returncode == 0
 
 
 def get_image_config(images_config, name_tag: tuple):
@@ -59,7 +95,7 @@ def get_dependency_targets(images_data, target, action) -> set:
     return return_deps
 
 
-def pull_images(images_data, targets=[]):
+def pull_images(images_data, targets=[], **_):
     if not len(targets):
         targets = [
             (image["name"], image["tag"])
@@ -73,7 +109,7 @@ def pull_images(images_data, targets=[]):
             exit(f"Failed to pull image: {image['name']}:{image['tag']}")
 
 
-def build_images(images_data, targets=[]):
+def build_images(images_data, targets=[], **_):
     if not len(targets):
         targets = [
             (image["name"], image["tag"])
@@ -98,6 +134,34 @@ def build_images(images_data, targets=[]):
             did_something = True
         if not did_something:
             raise ValueError("Circular dependency detected")
+
+
+def tag_images(images_data, targets=[], prefix=""):
+    if not len(targets):
+        targets = [
+            (image["name"], image["tag"])
+            for image in filter(lambda x: "tag" in x["actions"], images_data)
+        ]
+    tag_targets = set(targets)
+    for target in tag_targets:
+        image = get_image_config(images_data, target)
+        success = tag_image(image, prefix)
+        if not success:
+            exit(f"Failed to tag image: {image['name']}:{image['tag']}")
+
+
+def push_images(images_data, targets=[], prefix=""):
+    if not len(targets):
+        targets = [
+            (image["name"], image["tag"])
+            for image in filter(lambda x: "push" in x["actions"], images_data)
+        ]
+    push_targets = set(targets)
+    for target in push_targets:
+        image = get_image_config(images_data, target)
+        success = push_image(image, prefix)
+        if not success:
+            exit(f"Failed to push image: {image['name']}:{image['tag']}")
 
 
 def validate_images_schema(images):
@@ -175,15 +239,26 @@ def validate_images_dependencies(images):
 def main():
     parser = ArgumentParser("wake")
     parser.add_argument("--config", type=str, default="wake.json")
-    parser.add_argument("--tag-prefix", type=str, default="")
+    parser.add_argument("--tag-prefix", type=str, default=None)
     parser.add_argument("--cosign-profile", type=str, default=None)
     subparsers = parser.add_subparsers(dest="action", required=True)
+
     build_parser = subparsers.add_parser("build")
     build_parser.set_defaults(func=build_images)
     build_parser.add_argument("targets", nargs="*", default=[])
+
     pull_parser = subparsers.add_parser("pull")
     pull_parser.set_defaults(func=pull_images)
     pull_parser.add_argument("targets", type=str, nargs="*")
+
+    tag_parser = subparsers.add_parser("tag")
+    tag_parser.set_defaults(func=tag_images)
+    tag_parser.add_argument("targets", type=str, nargs="*")
+
+    push_parser = subparsers.add_parser("push")
+    push_parser.set_defaults(func=push_images)
+    push_parser.add_argument("targets", type=str, nargs="*")
+
     args = parser.parse_args()
     with open(args.config, "r") as f:
         images_data = json.load(f)
@@ -193,7 +268,8 @@ def main():
         targets = get_matching_targets(images_data, args.targets, args.action)
     except ValueError as e:
         exit(f"Invalid images file: {e}")
-    return args.func(images_data, targets)
+    prefix = args.tag_prefix if args.tag_prefix is not None else os.environ.get("TAG_PREFIX", "")
+    return args.func(images_data, targets, prefix=prefix)
 
 
 if __name__ == "__main__":
