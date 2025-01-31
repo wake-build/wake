@@ -21,7 +21,7 @@ def build_image(config) -> bool:
             build_args.extend(["--build-arg", f"{key}={value}"])
     if "env_args" in config:
         for key in config["env_args"]:
-            build_args.extend(["--build-arg", f"{key}={os.environ[key]}"])
+            build_args.extend(["--build-arg", f"{key}={os.environ.get(key, "")}"])
     if "context" in config:
         build_args.append(config["context"])
     else:
