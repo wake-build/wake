@@ -5,7 +5,7 @@ import sys
 from argparse import ArgumentParser
 
 
-def build_image(config) -> bool:
+def build_image(config, dry_run=False) -> bool:
     build_args = [
         "docker",
         "build",
@@ -26,26 +26,45 @@ def build_image(config) -> bool:
         build_args.append(config["context"])
     else:
         build_args.append(".")
-    proc = subprocess.run(build_args)
-    return proc.returncode == 0
+    if not dry_run:
+        proc = subprocess.run(build_args)
+        return proc.returncode == 0
+    else:
+        print(" ".join(build_args))
+        return True
 
 
-def pull_image(config) -> bool:
-    proc = subprocess.run(["docker", "pull", f"{config['name']}:{config['tag']}"])
-    return proc.returncode == 0
+def pull_image(config, dry_run=False) -> bool:
+    cmd = ["docker", "pull", f"{config['name']}:{config['tag']}"]
+    if not dry_run:
+        proc = subprocess.run(cmd)
+        return proc.returncode == 0
+    else:
+        print(" ".join(cmd))
+        return True
 
 
-def tag_image(config, prefix="") -> bool:
+def tag_image(config, prefix="", dry_run=False) -> bool:
     if not prefix:
         # Skip tagging if no prefix is provided
         return True
-    proc = subprocess.run(["docker", "tag", f"{config['name']}:{config['tag']}", f"{prefix}{config['name']}:{config['tag']}"])
-    return proc.returncode == 0
+    cmd = ["docker", "tag", f"{config['name']}:{config['tag']}", f"{prefix}{config['name']}:{config['tag']}"]
+    if not dry_run:
+        proc = subprocess.run(cmd)
+        return proc.returncode == 0
+    else:
+        print(" ".join(cmd))
+        return True
 
 
-def push_image(config, prefix="") -> bool:
-    proc = subprocess.run(["docker", "push", f"{prefix}{config['name']}:{config['tag']}"])
-    return proc.returncode == 0
+def push_image(config, prefix="", dry_run=False) -> bool:
+    cmd = ["docker", "push", f"{prefix}{config['name']}:{config['tag']}"]
+    if not dry_run:
+        proc = subprocess.run(cmd)
+        return proc.returncode == 0
+    else:
+        print(" ".join(cmd))
+        return True
 
 
 def get_image_config(images_config, name_tag: tuple):
@@ -94,7 +113,7 @@ def get_dependency_targets(images_data, target, action) -> set:
     return return_deps
 
 
-def pull_images(images_data, targets=[], **_):
+def pull_images(images_data, targets=[], dry_run=False, **_):
     if not len(targets):
         targets = [
             (image["name"], image["tag"])
@@ -103,12 +122,12 @@ def pull_images(images_data, targets=[], **_):
     pull_targets = set(targets)
     for target in pull_targets:
         image = get_image_config(images_data, target)
-        success = pull_image(image)
+        success = pull_image(image, dry_run=dry_run)
         if not success:
             exit(f"Failed to pull image: {image['name']}:{image['tag']}")
 
 
-def build_images(images_data, targets=[], **_):
+def build_images(images_data, targets=[], dry_run=False, **_):
     if not len(targets):
         targets = [
             (image["name"], image["tag"])
@@ -127,7 +146,7 @@ def build_images(images_data, targets=[], **_):
                 # Will only be in remaining_targets if it requires building
                 if (dep["name"], dep["tag"]) in remaining_targets:
                     break
-            if not build_image(image):
+            if not build_image(image, dry_run=dry_run):
                 exit(f"Failed to build image: {image['name']}:{image['tag']}")
             remaining_targets.remove(target)
             did_something = True
@@ -135,7 +154,7 @@ def build_images(images_data, targets=[], **_):
             raise ValueError("Circular dependency detected")
 
 
-def tag_images(images_data, targets=[], prefix=""):
+def tag_images(images_data, targets=[], prefix="", dry_run=False, **_):
     if not len(targets):
         targets = [
             (image["name"], image["tag"])
@@ -144,12 +163,12 @@ def tag_images(images_data, targets=[], prefix=""):
     tag_targets = set(targets)
     for target in tag_targets:
         image = get_image_config(images_data, target)
-        success = tag_image(image, prefix)
+        success = tag_image(image, prefix=prefix, dry_run=dry_run)
         if not success:
             exit(f"Failed to tag image: {image['name']}:{image['tag']}")
 
 
-def push_images(images_data, targets=[], prefix=""):
+def push_images(images_data, targets=[], prefix="", dry_run=False, **_):
     if not len(targets):
         targets = [
             (image["name"], image["tag"])
@@ -158,7 +177,7 @@ def push_images(images_data, targets=[], prefix=""):
     push_targets = set(targets)
     for target in push_targets:
         image = get_image_config(images_data, target)
-        success = push_image(image, prefix)
+        success = push_image(image, prefix=prefix, dry_run=dry_run)
         if not success:
             exit(f"Failed to push image: {image['name']}:{image['tag']}")
 
@@ -266,6 +285,10 @@ def main():
             images_data = json.load(f)
     except FileNotFoundError:
         exit(f"Could not find config file: {args.config}")
+    # Set default tags
+    for image in images_data:
+        if "tag" not in image:
+            image["tag"] = args.default_tag
     try:
         validate_images_schema(images_data)
         validate_images_dependencies(images_data)
