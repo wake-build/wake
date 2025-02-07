@@ -238,6 +238,8 @@ def validate_images_dependencies(images):
 def main():
     parser = ArgumentParser("wake")
     parser.add_argument("-f", "--config", type=str, default="Wakefile")
+    parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("-d", "--default-tag", type=str, default="latest")
     parser.add_argument("-t", "--tag-prefix", type=str, default=None)
     parser.add_argument("-p", "--cosign-profile", type=str, default=None)
     subparsers = parser.add_subparsers(dest="action", required=True)
