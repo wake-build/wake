@@ -7,9 +7,15 @@ name = "wake-build"
 version = "0.1.0"
 description = "Wake container build orchestrator"
 requires-python = ">=3.7"
-classifiers = [
-    "Programming Language :: Python :: 3",
-]
+classifiers = ["Programming Language :: Python :: 3"]
 
 [project.scripts]
 wake = "wake_build:main"
+
+[tool.ruff]
+line-length = 80
+indent-width = 4
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"

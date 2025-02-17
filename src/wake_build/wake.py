@@ -21,7 +21,9 @@ def build_image(config, dry_run=False) -> bool:
             build_args.extend(["--build-arg", f"{key}={value}"])
     if "env_args" in config:
         for key in config["env_args"]:
-            build_args.extend(["--build-arg", f"{key}={os.environ.get(key, '')}"])
+            build_args.extend(
+                ["--build-arg", f"{key}={os.environ.get(key, '')}"]
+            )
     if "context" in config:
         build_args.append(config["context"])
     else:
@@ -48,7 +50,12 @@ def tag_image(config, prefix="", dry_run=False) -> bool:
     if not prefix:
         # Skip tagging if no prefix is provided
         return True
-    cmd = ["docker", "tag", f"{config['name']}:{config['tag']}", f"{prefix}{config['name']}:{config['tag']}"]
+    cmd = [
+        "docker",
+        "tag",
+        f"{config['name']}:{config['tag']}",
+        f"{prefix}{config['name']}:{config['tag']}",
+    ]
     if not dry_run:
         proc = subprocess.run(cmd)
         return proc.returncode == 0
@@ -99,13 +106,20 @@ def get_matching_targets(images_data, targets, action):
 
 def get_dependency_targets(images_data, target, action) -> set:
     action_targets = [
-            (image["name"], image["tag"])
-            for image in filter(lambda x: action in x["actions"], images_data)
+        (image["name"], image["tag"])
+        for image in filter(lambda x: action in x["actions"], images_data)
     ]
     target_dependencies = set()
     image_config = get_image_config(images_data, target)
     if image_config.get("dependencies"):
-        target_dependencies.update(set([(dep["name"], dep["tag"]) for dep in image_config["dependencies"]]))
+        target_dependencies.update(
+            set(
+                [
+                    (dep["name"], dep["tag"])
+                    for dep in image_config["dependencies"]
+                ]
+            )
+        )
 
     return_deps = target_dependencies.intersection(action_targets)
     for dep in return_deps.copy():
@@ -190,15 +204,21 @@ def validate_images_schema(images):
         if "name" not in image:
             raise ValueError("Missing field in image: name")
         elif not isinstance(image["name"], str):
-            raise ValueError("Incorrect field type in image: name must be type string")
+            raise ValueError(
+                "Incorrect field type in image: name must be type string"
+            )
         if "tag" not in image:
             raise ValueError("Missing field in image: tag")
         elif not isinstance(image["tag"], str):
-            raise ValueError("Incorrect field type in image: tag must be type string")
+            raise ValueError(
+                "Incorrect field type in image: tag must be type string"
+            )
         if "actions" not in image:
             raise ValueError("Missing field in image: actions")
         elif not isinstance(image["actions"], list):
-            raise ValueError("Incorrect field type in image: actions must be type list")
+            raise ValueError(
+                "Incorrect field type in image: actions must be type list"
+            )
         else:
             for action in image["actions"]:
                 if not isinstance(action, str):
@@ -211,7 +231,9 @@ def validate_images_schema(images):
                     )
         # Next check optional fields
         if "target" in image and not isinstance(image["target"], str):
-            raise ValueError("Incorrect field type in image: target must be type str")
+            raise ValueError(
+                "Incorrect field type in image: target must be type str"
+            )
         if "dockerfile" in image and not isinstance(image["dockerfile"], str):
             raise ValueError(
                 "Incorrect field type in image: dockerfile must be type str"
@@ -242,7 +264,11 @@ def validate_images_dependencies(images):
     # Check that all dependencies are defined
     image_names = [image["name"] for image in images]
     image_names = [
-        image["name"] for image in filter(lambda x: len({"pull", "build"}.intersection(set(x["actions"]))), images)
+        image["name"]
+        for image in filter(
+            lambda x: len({"pull", "build"}.intersection(set(x["actions"]))),
+            images,
+        )
     ]
     for image in images:
         if "dependencies" in image:
@@ -295,7 +321,11 @@ def main():
         targets = get_matching_targets(images_data, args.targets, args.action)
     except ValueError as e:
         exit(f"Invalid images file: {e}")
-    prefix = args.tag_prefix if args.tag_prefix is not None else os.environ.get("TAG_PREFIX", "")
+    prefix = (
+        args.tag_prefix
+        if args.tag_prefix is not None
+        else os.environ.get("TAG_PREFIX", "")
+    )
     return args.func(images_data, targets, prefix=prefix)
 
 
