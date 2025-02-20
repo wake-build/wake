@@ -160,6 +160,7 @@ def build_images(images_data, targets=[], dry_run=False, **_):
                 # Will only be in remaining_targets if it requires building
                 if (dep["name"], dep["tag"]) in remaining_targets:
                     break
+            # TODO add a way to build images concurrently when possible
             if not build_image(image, dry_run=dry_run):
                 exit(f"Failed to build image: {image['name']}:{image['tag']}")
             remaining_targets.remove(target)
