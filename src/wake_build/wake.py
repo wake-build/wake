@@ -3,47 +3,77 @@ import os
 import subprocess
 import sys
 from argparse import ArgumentParser
+import logging
+
+
+logger = logging.getLogger("wake")
+
+
+# Custom log formatter class
+class LogFormatter(logging.Formatter):
+    grey = "\x1b[38;20m"
+    green = "\x1b[33;92m"
+    yellow = "\x1b[33;20m"
+    red = "\x1b[31;20m"
+    bold_red = "\x1b[31;1m"
+    reset = "\x1b[0m"
+    format = "%(levelname)s: %(message)s"
+
+    FORMATS = {
+        logging.DEBUG: grey + format + reset,
+        logging.INFO: green + format + reset,
+        logging.WARNING: yellow + format + reset,
+        logging.ERROR: red + format + reset,
+        logging.CRITICAL: bold_red + format + reset,
+        logging.FATAL: bold_red + format + reset,
+    }
+
+    def format(self, record):
+        log_fmt = self.FORMATS.get(record.levelno)
+        formatter = logging.Formatter(log_fmt)
+        return formatter.format(record)
+
+
+def run_command(command, dry_run=False):
+    logger.info(f"Running command: `{' '.join(command)}`")
+    if dry_run:
+        return True
+    proc = subprocess.run(command, capture_output=True)
+    if proc.returncode:
+        logger.error(
+            f"Command `{' '.join(command)}` failed with return code: {proc.returncode}"
+        )
+        sys.stdout.write(proc.stderr.decode())
+    return proc.returncode == 0
 
 
 def build_image(config, dry_run=False) -> bool:
-    build_args = [
+    cmd = [
         "docker",
         "build",
         "--tag",
         f"{config['name']}:{config['tag']}",
     ]
     if "target" in config:
-        build_args.extend(["--target", config["target"]])
+        cmd.extend(["--target", config["target"]])
     if "dockerfile" in config:
-        build_args.extend(["--file", config["dockerfile"]])
+        cmd.extend(["--file", config["dockerfile"]])
     if "build_args" in config:
         for key, value in config["build_args"].items():
-            build_args.extend(["--build-arg", f"{key}={value}"])
+            cmd.extend(["--build-arg", f"{key}={value}"])
     if "env_args" in config:
         for key in config["env_args"]:
-            build_args.extend(
-                ["--build-arg", f"{key}={os.environ.get(key, '')}"]
-            )
+            cmd.extend(["--build-arg", f"{key}={os.environ.get(key, '')}"])
     if "context" in config:
-        build_args.append(config["context"])
+        cmd.append(config["context"])
     else:
-        build_args.append(".")
-    if not dry_run:
-        proc = subprocess.run(build_args)
-        return proc.returncode == 0
-    else:
-        print(" ".join(build_args))
-        return True
+        cmd.append(".")
+    return run_command(cmd, dry_run=dry_run)
 
 
 def pull_image(config, dry_run=False) -> bool:
     cmd = ["docker", "pull", f"{config['name']}:{config['tag']}"]
-    if not dry_run:
-        proc = subprocess.run(cmd)
-        return proc.returncode == 0
-    else:
-        print(" ".join(cmd))
-        return True
+    return run_command(cmd, dry_run=dry_run)
 
 
 def tag_image(config, prefix="", dry_run=False) -> bool:
@@ -56,22 +86,12 @@ def tag_image(config, prefix="", dry_run=False) -> bool:
         f"{config['name']}:{config['tag']}",
         f"{prefix}{config['name']}:{config['tag']}",
     ]
-    if not dry_run:
-        proc = subprocess.run(cmd)
-        return proc.returncode == 0
-    else:
-        print(" ".join(cmd))
-        return True
+    return run_command(cmd, dry_run=dry_run)
 
 
 def push_image(config, prefix="", dry_run=False) -> bool:
     cmd = ["docker", "push", f"{prefix}{config['name']}:{config['tag']}"]
-    if not dry_run:
-        proc = subprocess.run(cmd)
-        return proc.returncode == 0
-    else:
-        print(" ".join(cmd))
-        return True
+    return run_command(cmd, dry_run=dry_run)
 
 
 def get_image_config(images_config, name_tag: tuple):
@@ -138,7 +158,10 @@ def pull_images(images_data, targets=[], dry_run=False, **_):
         image = get_image_config(images_data, target)
         success = pull_image(image, dry_run=dry_run)
         if not success:
-            exit(f"Failed to pull image: {image['name']}:{image['tag']}")
+            logger.critical(
+                f"Failed to pull image: {image['name']}:{image['tag']}"
+            )
+            exit(1)
 
 
 def build_images(images_data, targets=[], dry_run=False, **_):
@@ -151,18 +174,26 @@ def build_images(images_data, targets=[], dry_run=False, **_):
     for target in build_targets.copy():
         dep_targets = get_dependency_targets(images_data, target, "build")
         build_targets.update(dep_targets)
+    # import pdb; pdb.set_trace()
     remaining_targets = build_targets.copy()
     while len(remaining_targets):
         did_something = False
         for target in remaining_targets.copy():
             image = get_image_config(images_data, target)
+            unbuilt_dependencies = False
             for dep in image.get("dependencies", []):
                 # Will only be in remaining_targets if it requires building
                 if (dep["name"], dep["tag"]) in remaining_targets:
+                    unbuilt_dependencies = True
                     break
+            if unbuilt_dependencies:
+                continue
             # TODO add a way to build images concurrently when possible
             if not build_image(image, dry_run=dry_run):
-                exit(f"Failed to build image: {image['name']}:{image['tag']}")
+                logger.critical(
+                    f"Failed to build image: {image['name']}:{image['tag']}"
+                )
+                exit(1)
             remaining_targets.remove(target)
             did_something = True
         if not did_something:
@@ -180,7 +211,10 @@ def tag_images(images_data, targets=[], prefix="", dry_run=False, **_):
         image = get_image_config(images_data, target)
         success = tag_image(image, prefix=prefix, dry_run=dry_run)
         if not success:
-            exit(f"Failed to tag image: {image['name']}:{image['tag']}")
+            logger.critical(
+                f"Failed to tag image: {image['name']}:{image['tag']}"
+            )
+            exit(1)
 
 
 def push_images(images_data, targets=[], prefix="", dry_run=False, **_):
@@ -194,7 +228,10 @@ def push_images(images_data, targets=[], prefix="", dry_run=False, **_):
         image = get_image_config(images_data, target)
         success = push_image(image, prefix=prefix, dry_run=dry_run)
         if not success:
-            exit(f"Failed to push image: {image['name']}:{image['tag']}")
+            logger.critical(
+                f"Failed to push image: {image['name']}:{image['tag']}"
+            )
+            exit(1)
 
 
 def validate_images_schema(images):
@@ -283,6 +320,7 @@ def validate_images_dependencies(images):
 
 def main():
     parser = ArgumentParser("wake")
+    parser.add_argument("-v", "--verbose", action="count", default=0)
     parser.add_argument("-f", "--config", type=str, default="Wakefile")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("-d", "--default-tag", type=str, default="latest")
@@ -307,11 +345,28 @@ def main():
     push_parser.add_argument("targets", type=str, nargs="*")
 
     args = parser.parse_args()
+
+    log_level = logging.WARNING
+    if args.verbose >= 2:
+        log_level = logging.DEBUG
+    elif args.verbose == 1:
+        log_level = logging.INFO
+    elif args.verbose == 0:
+        log_level = logging.WARNING
+    elif args.verbose < 0:
+        log_level = logging.ERROR
+    logger.setLevel(log_level)
+    ch = logging.StreamHandler()
+    ch.setLevel(log_level)
+    ch.setFormatter(LogFormatter())
+    logger.addHandler(ch)
+
     try:
         with open(args.config, "r") as f:
             images_data = json.load(f)
     except FileNotFoundError:
-        exit(f"Could not find config file: {args.config}")
+        logger.critical(f"Could not find config file: {args.config}")
+        exit(1)
     # Set default tags
     for image in images_data:
         if "tag" not in image:
@@ -321,7 +376,8 @@ def main():
         validate_images_dependencies(images_data)
         targets = get_matching_targets(images_data, args.targets, args.action)
     except ValueError as e:
-        exit(f"Invalid images file: {e}")
+        logger.critical(f"Invalid images file: {e}")
+        exit(1)
     prefix = (
         args.tag_prefix
         if args.tag_prefix is not None
