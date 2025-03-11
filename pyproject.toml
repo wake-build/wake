@@ -8,7 +8,7 @@ version = "0.1.1"
 description = "Wake container build orchestrator"
 requires-python = ">=3.7"
 classifiers = ["Programming Language :: Python :: 3"]
-dependencies = ["pyyaml"]
+dependencies = ["pyyaml", "tqdm"]
 
 [project.scripts]
 wake = "wake_build:main"

@@ -1,13 +1,15 @@
 import json
+import logging
 import os
 import subprocess
 import sys
 from argparse import ArgumentParser
-import logging
 
-from wake_build.log import LogFormatter
-from wake_build.config import validate_images_schema, load_config
+import tqdm
+
+from wake_build.config import load_config, validate_images_schema
 from wake_build.exc import NoConfigFoundException
+from wake_build.log import LogFormatter
 
 logger = logging.getLogger("wake")
 
@@ -125,13 +127,17 @@ def get_dependency_targets(images_data, target, action) -> set:
     return return_deps
 
 
-def pull_images(images_data, targets=[], dry_run=False, **_):
+def pull_images(
+    images_data, targets=[], dry_run=False, show_progress=False, **_
+):
     if not len(targets):
         targets = [
             (image["name"], image["tag"])
             for image in filter(lambda x: "pull" in x["actions"], images_data)
         ]
     pull_targets = set(targets)
+    if show_progress:
+        progress = tqdm.tqdm(total=len(pull_targets), desc="Pulling")
     for target in pull_targets:
         image = get_image_config(images_data, target)
         success = pull_image(image, dry_run=dry_run)
@@ -140,9 +146,15 @@ def pull_images(images_data, targets=[], dry_run=False, **_):
                 f"Failed to pull image: {image['name']}:{image['tag']}"
             )
             exit(1)
+        if show_progress:
+            progress.update(1)
+    if show_progress:
+        progress.close()
 
 
-def build_images(images_data, targets=[], dry_run=False, **_):
+def build_images(
+    images_data, targets=[], dry_run=False, show_progress=False, **_
+):
     if not len(targets):
         targets = [
             (image["name"], image["tag"])
@@ -152,8 +164,9 @@ def build_images(images_data, targets=[], dry_run=False, **_):
     for target in build_targets.copy():
         dep_targets = get_dependency_targets(images_data, target, "build")
         build_targets.update(dep_targets)
-    # import pdb; pdb.set_trace()
     remaining_targets = build_targets.copy()
+    if show_progress:
+        progress = tqdm.tqdm(total=len(remaining_targets), desc="Building")
     while len(remaining_targets):
         did_something = False
         for target in remaining_targets.copy():
@@ -174,17 +187,25 @@ def build_images(images_data, targets=[], dry_run=False, **_):
                 exit(1)
             remaining_targets.remove(target)
             did_something = True
+            if show_progress:
+                progress.update(1)
         if not did_something:
             raise ValueError("Circular dependency detected")
+    if show_progress:
+        progress.close()
 
 
-def tag_images(images_data, targets=[], prefix="", dry_run=False, **_):
+def tag_images(
+    images_data, targets=[], prefix="", dry_run=False, show_progress=False, **_
+):
     if not len(targets):
         targets = [
             (image["name"], image["tag"])
             for image in filter(lambda x: "tag" in x["actions"], images_data)
         ]
     tag_targets = set(targets)
+    if show_progress:
+        progress = tqdm.tqdm(total=len(tag_targets), desc="Tagging")
     for target in tag_targets:
         image = get_image_config(images_data, target)
         success = tag_image(image, prefix=prefix, dry_run=dry_run)
@@ -193,15 +214,23 @@ def tag_images(images_data, targets=[], prefix="", dry_run=False, **_):
                 f"Failed to tag image: {image['name']}:{image['tag']}"
             )
             exit(1)
+        if show_progress:
+            progress.update(1)
+    if show_progress:
+        progress.close()
 
 
-def push_images(images_data, targets=[], prefix="", dry_run=False, **_):
+def push_images(
+    images_data, targets=[], prefix="", dry_run=False, show_progress=False, **_
+):
     if not len(targets):
         targets = [
             (image["name"], image["tag"])
             for image in filter(lambda x: "push" in x["actions"], images_data)
         ]
     push_targets = set(targets)
+    if show_progress:
+        progress = tqdm.tqdm(total=len(push_targets), desc="Pushing")
     for target in push_targets:
         image = get_image_config(images_data, target)
         success = push_image(image, prefix=prefix, dry_run=dry_run)
@@ -210,6 +239,10 @@ def push_images(images_data, targets=[], prefix="", dry_run=False, **_):
                 f"Failed to push image: {image['name']}:{image['tag']}"
             )
             exit(1)
+        if show_progress:
+            progress.update(1)
+    if show_progress:
+        progress.close()
 
 
 def validate_images_dependencies(images):
@@ -261,10 +294,13 @@ def main():
     args = parser.parse_args()
 
     log_level = logging.WARNING
+    show_progress = True
     if args.verbose >= 2:
         log_level = logging.DEBUG
+        show_progress = False
     elif args.verbose == 1:
         log_level = logging.INFO
+        show_progress = False
     elif args.verbose == 0:
         log_level = logging.WARNING
     elif args.verbose < 0:
@@ -301,7 +337,6 @@ def main():
     # Remove any empty images
     images_data = list(filter(lambda x: x, images_data))
 
-    # import pdb; pdb.set_trace()
     for image in images_data:
         if "tag" not in image:
             image["tag"] = args.default_tag
@@ -317,7 +352,13 @@ def main():
         if args.tag_prefix is not None
         else os.environ.get("TAG_PREFIX", "")
     )
-    return args.func(images_data, targets, prefix=prefix)
+    return args.func(
+        images_data,
+        targets,
+        dry_run=args.dry_run,
+        show_progress=show_progress,
+        prefix=prefix,
+    )
 
 
 if __name__ == "__main__":
