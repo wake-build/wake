@@ -1,0 +1,12 @@
+
+name: a2s1
+tag: "1.0"
+context: app2
+target: service1
+actions:
+    - build
+    - tag
+    - push
+dependencies:
+    - name: base-py
+      tag: "1.0"

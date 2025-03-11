@@ -1,0 +1,13 @@
+name: base-py
+tag: "1.0"
+dockerfile: base-py.Dockerfile
+actions:
+  - build
+dependencies:
+  - name: ubuntu
+    tag: "22.04"
+---
+name: ubuntu
+tag: "22.04"
+actions:
+  - pull

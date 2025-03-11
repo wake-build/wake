@@ -1,0 +1,36 @@
+[
+    {
+        "name": "a1s1",
+        "tag": "1.0",
+        "context": "app1",
+        "dockerfile": "app1/service1.Dockerfile",
+        "actions": [
+            "build",
+            "tag",
+            "push"
+        ],
+        "dependencies": [
+            {
+                "name": "base-py",
+                "tag": "1.0"
+            }
+        ]
+    },
+    {
+        "name": "a1s2",
+        "tag": "1.0",
+        "context": "app1",
+        "dockerfile": "app1/service2.Dockerfile",
+        "actions": [
+            "build",
+            "tag",
+            "push"
+        ],
+        "dependencies": [
+            {
+                "name": "base-py",
+                "tag": "1.0"
+            }
+        ]
+    }
+]

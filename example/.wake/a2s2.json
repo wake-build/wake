@@ -1,0 +1,20 @@
+{
+    "name": "a2s2",
+    "tag": "1.0",
+    "context": "app2",
+    "target": "service2",
+    "actions": [
+        "build",
+        "tag",
+        "push"
+    ],
+    "env_args": [
+        "SERVICE_MESSAGE"
+    ],
+    "dependencies": [
+        {
+            "name": "base-py",
+            "tag": "1.0"
+        }
+    ]
+}
