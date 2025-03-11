@@ -5,33 +5,11 @@ import sys
 from argparse import ArgumentParser
 import logging
 
+from wake_build.log import LogFormatter
+from wake_build.config import validate_images_schema, load_config
+from wake_build.exc import NoConfigFoundException
 
 logger = logging.getLogger("wake")
-
-
-# Custom log formatter class
-class LogFormatter(logging.Formatter):
-    grey = "\x1b[38;20m"
-    green = "\x1b[33;92m"
-    yellow = "\x1b[33;20m"
-    red = "\x1b[31;20m"
-    bold_red = "\x1b[31;1m"
-    reset = "\x1b[0m"
-    format = "%(levelname)s: %(message)s"
-
-    FORMATS = {
-        logging.DEBUG: grey + format + reset,
-        logging.INFO: green + format + reset,
-        logging.WARNING: yellow + format + reset,
-        logging.ERROR: red + format + reset,
-        logging.CRITICAL: bold_red + format + reset,
-        logging.FATAL: bold_red + format + reset,
-    }
-
-    def format(self, record):
-        log_fmt = self.FORMATS.get(record.levelno)
-        formatter = logging.Formatter(log_fmt)
-        return formatter.format(record)
 
 
 def run_command(command, dry_run=False):
@@ -234,70 +212,6 @@ def push_images(images_data, targets=[], prefix="", dry_run=False, **_):
             exit(1)
 
 
-def validate_images_schema(images):
-    if not isinstance(images, list):
-        raise ValueError("Base object is not a list")
-    for image in images:
-        # First check required fields
-        if "name" not in image:
-            raise ValueError("Missing field in image: name")
-        elif not isinstance(image["name"], str):
-            raise ValueError(
-                "Incorrect field type in image: name must be type string"
-            )
-        if "tag" not in image:
-            raise ValueError("Missing field in image: tag")
-        elif not isinstance(image["tag"], str):
-            raise ValueError(
-                "Incorrect field type in image: tag must be type string"
-            )
-        if "actions" not in image:
-            raise ValueError("Missing field in image: actions")
-        elif not isinstance(image["actions"], list):
-            raise ValueError(
-                "Incorrect field type in image: actions must be type list"
-            )
-        else:
-            for action in image["actions"]:
-                if not isinstance(action, str):
-                    raise ValueError(
-                        "Incorrect field type in image: action must be type string"
-                    )
-                if action not in ["pull", "build", "tag", "push", "sign"]:
-                    raise ValueError(
-                        "Incorrect field value in image: action must be one of 'pull', 'build', 'tag', 'push', 'sign'"
-                    )
-        # Next check optional fields
-        if "target" in image and not isinstance(image["target"], str):
-            raise ValueError(
-                "Incorrect field type in image: target must be type str"
-            )
-        if "dockerfile" in image and not isinstance(image["dockerfile"], str):
-            raise ValueError(
-                "Incorrect field type in image: dockerfile must be type str"
-            )
-        if "dependencies" in image:
-            if not isinstance(image["dependencies"], list):
-                raise ValueError(
-                    "Incorrect field type in image: dependencies must be type list"
-                )
-            # Check dependency format
-            for dependency in image["dependencies"]:
-                # First check required fields
-                if "name" not in dependency:
-                    raise ValueError("Missing field in dependency: name")
-                elif not isinstance(dependency["name"], str):
-                    raise ValueError(
-                        "Incorrect field type in dependency: name must be type string"
-                    )
-                if "tag" not in dependency:
-                    raise ValueError("Missing field in dependency: tag")
-                elif not isinstance(dependency["tag"], str):
-                    raise ValueError(
-                        "Incorrect field type in dependency: tag must be type string"
-                    )
-
-
 def validate_images_dependencies(images):
     # Check that all dependencies are defined
     image_names = [image["name"] for image in images]
@@ -321,7 +235,7 @@ def validate_images_dependencies(images):
 def main():
     parser = ArgumentParser("wake")
     parser.add_argument("-v", "--verbose", action="count", default=0)
-    parser.add_argument("-f", "--config", type=str, default="Wakefile")
+    parser.add_argument("-f", "--config", type=str)
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("-d", "--default-tag", type=str, default="latest")
     parser.add_argument("-t", "--tag-prefix", type=str, default=None)
@@ -361,13 +275,33 @@ def main():
     ch.setFormatter(LogFormatter())
     logger.addHandler(ch)
 
-    try:
-        with open(args.config, "r") as f:
-            images_data = json.load(f)
-    except FileNotFoundError:
-        logger.critical(f"Could not find config file: {args.config}")
+    images_data = []
+    loaded_config = False
+    if args.config:
+        try:
+            images_data = load_config(args.config)
+            loaded_config = True
+        except NoConfigFoundException:
+            logger.critical(
+                f"Specified config location not found: {args.config}"
+            )
+            exit(1)
+    else:
+        for location in ["Wakefile", ".wake"]:
+            try:
+                images_data = load_config(location)
+                loaded_config = True
+                break
+            except NoConfigFoundException:
+                pass
+    if not loaded_config:
+        logger.critical("No config found")
         exit(1)
-    # Set default tags
+
+    # Remove any empty images
+    images_data = list(filter(lambda x: x, images_data))
+
+    # import pdb; pdb.set_trace()
     for image in images_data:
         if "tag" not in image:
             image["tag"] = args.default_tag
