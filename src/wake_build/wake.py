@@ -214,7 +214,3 @@ def main():
         show_progress=show_progress,
         prefix=prefix,
     )
-
-
-if __name__ == "__main__":
-    sys.exit(main())
