@@ -1,5 +1,7 @@
 import logging
 
+logger = logging.getLogger("wake")
+
 
 # Custom log formatter class
 class LogFormatter(logging.Formatter):
@@ -24,3 +26,22 @@ class LogFormatter(logging.Formatter):
         log_fmt = self.FORMATS.get(record.levelno)
         formatter = logging.Formatter(log_fmt)
         return formatter.format(record)
+
+
+def configure_logger(verbosity_count):
+    log_level = logging.WARNING
+    if verbosity_count >= 2:
+        log_level = logging.DEBUG
+        show_progress = False
+    elif verbosity_count == 1:
+        log_level = logging.INFO
+        show_progress = False
+    elif verbosity_count == 0:
+        log_level = logging.WARNING
+    elif verbosity_count < 0:
+        log_level = logging.ERROR
+    logger.setLevel(log_level)
+    ch = logging.StreamHandler()
+    ch.setLevel(log_level)
+    ch.setFormatter(LogFormatter())
+    logger.addHandler(ch)
