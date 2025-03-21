@@ -2,7 +2,7 @@ from wake_build.util import run_command
 import os
 
 
-def build_image(config, dry_run=False) -> bool:
+def build_image(config, dry_run=False, live_output=False) -> bool:
     cmd = [
         "docker",
         "build",
@@ -23,15 +23,15 @@ def build_image(config, dry_run=False) -> bool:
         cmd.append(config["context"])
     else:
         cmd.append(".")
-    return run_command(cmd, dry_run=dry_run)
+    return run_command(cmd, dry_run=dry_run, live_output=live_output)
 
 
-def pull_image(config, dry_run=False) -> bool:
+def pull_image(config, dry_run=False, live_output=False) -> bool:
     cmd = ["docker", "pull", f"{config['name']}:{config['tag']}"]
-    return run_command(cmd, dry_run=dry_run)
+    return run_command(cmd, dry_run=dry_run, live_output=live_output)
 
 
-def tag_image(config, prefix="", dry_run=False) -> bool:
+def tag_image(config, prefix="", dry_run=False, live_output=False) -> bool:
     if not prefix:
         # Skip tagging if no prefix is provided
         return True
@@ -41,9 +41,9 @@ def tag_image(config, prefix="", dry_run=False) -> bool:
         f"{config['name']}:{config['tag']}",
         f"{prefix}{config['name']}:{config['tag']}",
     ]
-    return run_command(cmd, dry_run=dry_run)
+    return run_command(cmd, dry_run=dry_run, live_output=live_output)
 
 
-def push_image(config, prefix="", dry_run=False) -> bool:
+def push_image(config, prefix="", dry_run=False, live_output=False) -> bool:
     cmd = ["docker", "push", f"{prefix}{config['name']}:{config['tag']}"]
-    return run_command(cmd, dry_run=dry_run)
+    return run_command(cmd, dry_run=dry_run, live_output=live_output)

@@ -19,7 +19,7 @@ from wake_build.docker import build_image, pull_image, tag_image, push_image
 
 
 def pull_images(
-    images_data, targets=[], dry_run=False, show_progress=False, **_
+    images_data, targets=[], dry_run=False, show_progress=False, live_output=False, **_
 ):
     if not len(targets):
         targets = [
@@ -31,7 +31,7 @@ def pull_images(
         progress = tqdm.tqdm(total=len(pull_targets), desc="Pulling")
     for target in pull_targets:
         image = get_image_config(images_data, target)
-        success = pull_image(image, dry_run=dry_run)
+        success = pull_image(image, dry_run=dry_run, live_output=live_output)
         if not success:
             logger.critical(
                 f"Failed to pull image: {image['name']}:{image['tag']}"
@@ -44,7 +44,7 @@ def pull_images(
 
 
 def build_images(
-    images_data, targets=[], dry_run=False, show_progress=False, **_
+    images_data, targets=[], dry_run=False, show_progress=False, live_output=False, **_
 ):
     if not len(targets):
         targets = [
@@ -71,7 +71,7 @@ def build_images(
             if unbuilt_dependencies:
                 continue
             # TODO add a way to build images concurrently when possible
-            if not build_image(image, dry_run=dry_run):
+            if not build_image(image, dry_run=dry_run, live_output=live_output):
                 logger.critical(
                     f"Failed to build image: {image['name']}:{image['tag']}"
                 )
@@ -87,7 +87,7 @@ def build_images(
 
 
 def tag_images(
-    images_data, targets=[], prefix="", dry_run=False, show_progress=False, **_
+    images_data, targets=[], prefix="", dry_run=False, show_progress=False, live_output=False, **_
 ):
     if not len(targets):
         targets = [
@@ -99,7 +99,7 @@ def tag_images(
         progress = tqdm.tqdm(total=len(tag_targets), desc="Tagging")
     for target in tag_targets:
         image = get_image_config(images_data, target)
-        success = tag_image(image, prefix=prefix, dry_run=dry_run)
+        success = tag_image(image, prefix=prefix, dry_run=dry_run, live_output=live_output)
         if not success:
             logger.critical(
                 f"Failed to tag image: {image['name']}:{image['tag']}"
@@ -112,7 +112,7 @@ def tag_images(
 
 
 def push_images(
-    images_data, targets=[], prefix="", dry_run=False, show_progress=False, **_
+    images_data, targets=[], prefix="", dry_run=False, show_progress=False, show_logs=False, **_
 ):
     if not len(targets):
         targets = [
@@ -135,6 +135,12 @@ def push_images(
     if show_progress:
         progress.close()
 
+
+def pull_build_tag_push_images(*args, **kwargs):
+    pull_images(*args, **kwargs)
+    build_images(*args, **kwargs)
+    tag_images(*args, **kwargs)
+    push_images(*args, **kwargs)
 
 def main():
     parser = ArgumentParser("wake")
@@ -162,10 +168,15 @@ def main():
     push_parser.set_defaults(func=push_images)
     push_parser.add_argument("targets", type=str, nargs="*")
 
+    all_parser = subparsers.add_parser("all")
+    all_parser.set_defaults(func=pull_build_tag_push_images)
+    all_parser.add_argument("targets", type=str, nargs="*")
+
     args = parser.parse_args()
 
     configure_logger(args.verbose)
     show_progress = args.verbose < 1
+    live_output = args.verbose > 2
     images_data = []
     loaded_config = False
     if args.config:
@@ -213,4 +224,5 @@ def main():
         dry_run=args.dry_run,
         show_progress=show_progress,
         prefix=prefix,
+        live_output=live_output,
     )
