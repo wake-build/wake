@@ -2,6 +2,7 @@ import os
 import subprocess
 import sys
 from argparse import ArgumentParser
+from dotenv import load_dotenv, find_dotenv
 
 import tqdm
 
@@ -143,6 +144,7 @@ def pull_build_tag_push_images(*args, **kwargs):
     push_images(*args, **kwargs)
 
 def main():
+    load_dotenv(find_dotenv(usecwd=True))  # Use .env in directory where the user runs the script
     parser = ArgumentParser("wake")
     parser.add_argument("-v", "--verbose", action="count", default=0)
     parser.add_argument("-f", "--config", type=str)
