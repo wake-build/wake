@@ -20,7 +20,12 @@ from wake_build.docker import build_image, pull_image, tag_image, push_image
 
 
 def pull_images(
-    images_data, targets=[], dry_run=False, show_progress=False, live_output=False, **_
+    images_data,
+    targets=[],
+    dry_run=False,
+    show_progress=False,
+    live_output=False,
+    **_,
 ):
     if not len(targets):
         targets = [
@@ -45,7 +50,12 @@ def pull_images(
 
 
 def build_images(
-    images_data, targets=[], dry_run=False, show_progress=False, live_output=False, **_
+    images_data,
+    targets=[],
+    dry_run=False,
+    show_progress=False,
+    live_output=False,
+    **_,
 ):
     if not len(targets):
         targets = [
@@ -88,7 +98,13 @@ def build_images(
 
 
 def tag_images(
-    images_data, targets=[], prefix="", dry_run=False, show_progress=False, live_output=False, **_
+    images_data,
+    targets=[],
+    prefix="",
+    dry_run=False,
+    show_progress=False,
+    live_output=False,
+    **_,
 ):
     if not len(targets):
         targets = [
@@ -100,7 +116,9 @@ def tag_images(
         progress = tqdm.tqdm(total=len(tag_targets), desc="Tagging")
     for target in tag_targets:
         image = get_image_config(images_data, target)
-        success = tag_image(image, prefix=prefix, dry_run=dry_run, live_output=live_output)
+        success = tag_image(
+            image, prefix=prefix, dry_run=dry_run, live_output=live_output
+        )
         if not success:
             logger.critical(
                 f"Failed to tag image: {image['name']}:{image['tag']}"
@@ -113,7 +131,13 @@ def tag_images(
 
 
 def push_images(
-    images_data, targets=[], prefix="", dry_run=False, show_progress=False, show_logs=False, **_
+    images_data,
+    targets=[],
+    prefix="",
+    dry_run=False,
+    show_progress=False,
+    show_logs=False,
+    **_,
 ):
     if not len(targets):
         targets = [
@@ -143,8 +167,11 @@ def pull_build_tag_push_images(*args, **kwargs):
     tag_images(*args, **kwargs)
     push_images(*args, **kwargs)
 
+
 def main():
-    load_dotenv(find_dotenv(usecwd=True))  # Use .env in directory where the user runs the script
+    load_dotenv(
+        find_dotenv(usecwd=True)
+    )  # Use .env in directory where the user runs the script
     parser = ArgumentParser("wake")
     parser.add_argument("-v", "--verbose", action="count", default=0)
     parser.add_argument("-f", "--config", type=str)
