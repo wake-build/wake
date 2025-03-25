@@ -27,6 +27,7 @@ def pull_images(
     live_output=False,
     **_,
 ):
+    targets = get_matching_targets(images_data, targets, "pull")
     if not len(targets):
         targets = [
             (image["name"], image["tag"])
@@ -57,6 +58,7 @@ def build_images(
     live_output=False,
     **_,
 ):
+    targets = get_matching_targets(images_data, targets, "build")
     if not len(targets):
         targets = [
             (image["name"], image["tag"])
@@ -106,6 +108,7 @@ def tag_images(
     live_output=False,
     **_,
 ):
+    targets = get_matching_targets(images_data, targets, "tag")
     if not len(targets):
         targets = [
             (image["name"], image["tag"])
@@ -136,9 +139,10 @@ def push_images(
     prefix="",
     dry_run=False,
     show_progress=False,
-    show_logs=False,
+    live_output=False,
     **_,
 ):
+    targets = get_matching_targets(images_data, targets, "push")
     if not len(targets):
         targets = [
             (image["name"], image["tag"])
@@ -149,7 +153,7 @@ def push_images(
         progress = tqdm.tqdm(total=len(push_targets), desc="Pushing")
     for target in push_targets:
         image = get_image_config(images_data, target)
-        success = push_image(image, prefix=prefix, dry_run=dry_run)
+        success = push_image(image, prefix=prefix, dry_run=dry_run, live_output=live_output)
         if not success:
             logger.critical(
                 f"Failed to push image: {image['name']}:{image['tag']}"
@@ -162,10 +166,11 @@ def push_images(
 
 
 def pull_build_tag_push_images(*args, **kwargs):
-    pull_images(*args, **kwargs)
-    build_images(*args, **kwargs)
-    tag_images(*args, **kwargs)
-    push_images(*args, **kwargs)
+    for func in [pull_images, build_images, tag_images, push_images]:
+        try:
+            func(*args, **kwargs)
+        except ValueError:
+            pass
 
 
 def main():
@@ -238,7 +243,6 @@ def main():
     try:
         validate_images_schema(images_data)
         validate_images_dependencies(images_data)
-        targets = get_matching_targets(images_data, args.targets, args.action)
     except ValueError as e:
         logger.critical(f"Invalid images file: {e}")
         exit(1)
@@ -249,7 +253,7 @@ def main():
     )
     return args.func(
         images_data,
-        targets,
+        args.targets,
         dry_run=args.dry_run,
         show_progress=show_progress,
         prefix=prefix,
