@@ -153,7 +153,9 @@ def push_images(
         progress = tqdm.tqdm(total=len(push_targets), desc="Pushing")
     for target in push_targets:
         image = get_image_config(images_data, target)
-        success = push_image(image, prefix=prefix, dry_run=dry_run, live_output=live_output)
+        success = push_image(
+            image, prefix=prefix, dry_run=dry_run, live_output=live_output
+        )
         if not success:
             logger.critical(
                 f"Failed to push image: {image['name']}:{image['tag']}"
