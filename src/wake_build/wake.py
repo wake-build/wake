@@ -34,6 +34,9 @@ def pull_images(
             for image in filter(lambda x: "pull" in x["actions"], images_data)
         ]
     pull_targets = set(targets)
+    for target in pull_targets.copy():
+        dep_targets = get_dependency_targets(images_data, target, "pull")
+        pull_targets.update(dep_targets)
     if show_progress:
         progress = tqdm.tqdm(total=len(pull_targets), desc="Pulling")
     for target in pull_targets:
@@ -215,6 +218,9 @@ def main():
     live_output = args.verbose > 2
     images_data = []
     loaded_config = False
+    targets = args.targets
+    if "all" in targets:
+        targets = []
     if args.config:
         try:
             images_data = load_config(args.config)
@@ -255,7 +261,7 @@ def main():
     )
     return args.func(
         images_data,
-        args.targets,
+        targets,
         dry_run=args.dry_run,
         show_progress=show_progress,
         prefix=prefix,
