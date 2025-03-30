@@ -151,26 +151,34 @@ def get_matching_targets(images_data, targets, action):
 
 
 def get_dependency_targets(images_data, target, action) -> set:
+    """
+    Get the dependencies of a target image that have the specified action
+    """
+    # Get all images that have the specified action, regardless if it's a dependency
     action_targets = [
         (image["name"], image["tag"])
         for image in filter(lambda x: action in x["actions"], images_data)
     ]
-    target_dependencies = set()
-    image_config = get_image_config(images_data, target)
-    if image_config.get("dependencies"):
-        target_dependencies.update(
-            set(
-                [
-                    (dep["name"], dep["tag"])
-                    for dep in image_config["dependencies"]
-                ]
+    
+    # Get all recursive dependencies of the target image
+    all_dependencies = set([target])
+    while True:
+        before_len = len(all_dependencies)
+        for image in all_dependencies.copy():
+            all_dependencies.update(
+                set(
+                    [
+                        (dep["name"], dep["tag"])
+                        for dep in get_image_config(images_data, image).get("dependencies", [])
+                    ]
+                )
             )
-        )
+        if len(all_dependencies) == before_len:
+            break
 
-    return_deps = target_dependencies.intersection(action_targets)
-    for dep in return_deps.copy():
-        return_deps.update(get_dependency_targets(images_data, dep, action))
-    return return_deps
+    # Now we have all the dependencies, regardless if they match the target
+    # Return only the dependencies that have the specified action (intersection)
+    return all_dependencies.intersection(action_targets)
 
 
 def validate_images_dependencies(images):
