@@ -170,8 +170,8 @@ def push_images(
         progress.close()
 
 
-def pull_build_tag_push_images(*args, **kwargs):
-    for func in [pull_images, build_images, tag_images, push_images]:
+def build_tag_push_images(*args, **kwargs):
+    for func in [build_images, tag_images, push_images]:
         try:
             func(*args, **kwargs)
         except ValueError:
@@ -208,7 +208,7 @@ def main():
     push_parser.add_argument("targets", type=str, nargs="*")
 
     all_parser = subparsers.add_parser("all")
-    all_parser.set_defaults(func=pull_build_tag_push_images)
+    all_parser.set_defaults(func=build_tag_push_images)
     all_parser.add_argument("targets", type=str, nargs="*")
 
     args = parser.parse_args()
